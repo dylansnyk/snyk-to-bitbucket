@@ -1,0 +1,13 @@
+{
+  "name": "snyk-to-bitbucket",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "main": "node main.js"
+  },
+  "dependencies": {
+    "axios": "^0.24.0",
+    "minimist": "^1.2.5",
+    "uuid": "^8.3.2"
+  }
+}
