@@ -1,9 +1,10 @@
 {
-  "name": "snyk-to-bitbucket",
-  "version": "1.0.0",
+  "name": "snyk-to-bb",
+  "version": "1.0.4",
   "type": "module",
+  "bin": "index.js",
   "scripts": {
-    "main": "node main.js"
+    "main": "node index.js"
   },
   "dependencies": {
     "axios": "^0.24.0",

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import axios from 'axios'
 import minimist from 'minimist'
 import { v4 as uuidv4 } from 'uuid'
@@ -10,6 +12,30 @@ const BB_USER = argv['user']
 const BB_APP_PASSWORD = argv['password']
 const REPO = argv['repo']
 const COMMIT = argv['commit']
+
+const paramsAreValid = () => {
+  if (BB_USER == null) {
+    console.log('Error: specify user')
+    return false
+  }
+
+  if (BB_APP_PASSWORD == null) {
+    console.log('Error: specify password')
+    return false
+  }
+
+  if (REPO == null) {
+    console.log('Error: specify repo')
+    return false
+  }
+
+  if (COMMIT == null) {
+    console.log('Error: specify commit')
+    return false
+  }
+
+  return true
+}
 
 const mapSnykToBitBucket = async (snykRawOutput) => {
 
@@ -94,4 +120,6 @@ const getInput = () => {
   });
 }
 
-getInput().then(mapSnykToBitBucket).catch(console.error)
+if (paramsAreValid()) {
+  getInput().then(mapSnykToBitBucket).catch(console.error)
+}
