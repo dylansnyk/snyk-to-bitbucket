@@ -37,12 +37,86 @@ const paramsAreValid = () => {
   return true
 }
 
+const mapCode = (snykResult) => {
+  const severityMap = {
+    'note': 'LOW',
+    'warning': 'MEDIUM',
+    'error': 'HIGH'
+  }
+
+  return snykResult['runs'][0]['results']
+    .map(result => {
+      return {
+        external_id: uuidv4(),
+        annotation_type: "VULNERABILITY",
+        severity: severityMap[result['level']],
+        path: result['locations'][0]['physicalLocation']['artifactLocation']['uri'],
+        line: result['locations'][0]['physicalLocation']['region']['endLine'],
+        title: result['ruleId'],
+        summary: result['message']['text']
+      }
+    })
+}
+
+const mapOpenSource = (snykResult) => {
+  const set = new Set()
+
+  return snykResult['vulnerabilities']
+    .filter(vuln => {
+      if (set.has(vuln['id'])) {
+        return false
+      }
+      set.add(vuln['id'])
+      return true
+    })
+    .map(vuln => {
+      return {
+        external_id: uuidv4(),
+        annotation_type: "VULNERABILITY",
+        severity: vuln['severity'].toUpperCase(),
+        summary: `${vuln['packageName']}@${vuln['version']}: ${vuln['title']}`,
+        path: snykResult['displayTargetFile'],
+        details: `Snyk vulnerability ID: ${vuln['id']}`
+      }
+    })
+}
+
+const getScanType = (snykResult) => {
+  if (snykResult['runs'] != null) {
+    return {
+      id: 'snyk-code',
+      title: 'Snyk Code',
+      name: 'code',
+      mapper: mapCode,
+      count: snykResult['runs'][0]['results'].length
+    }
+  }
+
+  if (snykResult['vulnerabilities'] != null) {
+    return {
+      id: 'snyk-open-source',
+      title: 'Snyk Open Source',
+      name: 'open source',
+      mapper: mapOpenSource,
+      count: snykResult['uniqueCount']
+    }
+  }
+
+  return null
+}
+
 const mapSnykToBitBucket = async (snykRawOutput) => {
 
   const snykResult = JSON.parse(snykRawOutput);
+  const scanType = getScanType(snykResult);
+
+  if (scanType == null) {
+    console.log('Error: json format not recognized')
+    return 0;
+  }
 
   // 1. Delete Existing Report
-  await axios.delete(`${BB_API_URL}/${BB_USER}/${REPO}/commit/${COMMIT}/reports/snyk-open-source`,
+  await axios.delete(`${BB_API_URL}/${BB_USER}/${REPO}/commit/${COMMIT}/reports/${scanType['id']}`,
     {
       auth: {
         username: BB_USER,
@@ -53,10 +127,10 @@ const mapSnykToBitBucket = async (snykRawOutput) => {
 
   // 2. Create Report 
   await axios.put(
-    `${BB_API_URL}/${BB_USER}/${REPO}/commit/${COMMIT}/reports/snyk-open-source`,
+    `${BB_API_URL}/${BB_USER}/${REPO}/commit/${COMMIT}/reports/${scanType['id']}`,
     {
-      title: "Snyk Open Source",
-      details: `This repository contains ${snykResult['uniqueCount']} open source vulnerabilities`,
+      title: scanType['title'],
+      details: `This repository contains ${scanType['count']} ${scanType['name']} vulnerabilities`,
       report_type: "SECURITY",
       reporter: "Snyk",
       result: "PASSED"
@@ -70,28 +144,9 @@ const mapSnykToBitBucket = async (snykRawOutput) => {
   )
 
   // 3. Upload Annotations (Vulnerabilities)
-  const set = new Set()
+  const vulns = scanType.mapper(snykResult)
 
-  const vulns = snykResult['vulnerabilities']
-    .filter(vuln => {
-      if (set.has(vuln['id'])) {
-        return false
-      }
-      set.add(vuln['id'])
-      return true
-    })
-    .map(vuln => {
-      return {
-        external_id: uuidv4(),
-        annotation_type: "VULNERABILITY",
-        title: vuln['title'],
-        severity: vuln['severity'].toUpperCase(),
-        summary: `${vuln['packageName']}@${vuln['version']}`,
-        path: snykResult['displayTargetFile']
-      }
-    })
-
-  await axios.post(`${BB_API_URL}/${BB_USER}/${REPO}/commit/${COMMIT}/reports/snyk-open-source/annotations`,
+  await axios.post(`${BB_API_URL}/${BB_USER}/${REPO}/commit/${COMMIT}/reports/${scanType['id']}/annotations`,
     vulns,
     {
       auth: {

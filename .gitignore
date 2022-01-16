@@ -1,4 +1,10 @@
-.dccache
+# npm
 node_modules/
+
+# Snyk Code 
+.dccache
+
+# Testing
 snyk-example.json
+snyk-c
 note.txt
